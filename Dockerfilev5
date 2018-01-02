@@ -13,13 +13,6 @@ RUN update-locale LANG=en_US.UTF-8
 RUN echo "postfix postfix/main_mailer_type string Internet site" > preseed.txt
 RUN echo "postfix postfix/mailname string cdsenv.corp.capgemini.com" >> preseed.txt
 
-# Use Mailbox format.
-RUN debconf-set-selections preseed.txt
-RUN apt-get install -y postfix
-RUN postconf -e mydestination="$myhostname, cdsenv, localhost.localdomain, localhost"
-RUN postconf -e inet_interfaces="loopback-only"
-RUN postconf -e default_transport="smtp"
-RUN postconf -e relay_transport="error"
 
 
 #arret d'apache
