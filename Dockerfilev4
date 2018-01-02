@@ -1,0 +1,66 @@
+FROM ubuntu:latest
+
+
+ENV DEBIAN_FRONTEND noninteractive
+
+RUN apt-get update \
+    && apt-get install -y \
+        apache2 libapache2-mod-php php-mysql php-mbstring php-mcrypt php-gd php-intl php-xml php-zip php7.0-ldap mailutils git openssh-server 
+RUN apt-get install sshpass
+RUN apt-get install -y language-pack-en
+RUN update-locale LANG=en_US.UTF-8
+
+# Install Postfix.
+RUN echo "postfix postfix/main_mailer_type string Internet site" > preseed.txt
+RUN echo "postfix postfix/mailname string cdsenv.corp.capgemini.com" >> preseed.txt
+
+# Use Mailbox format.
+RUN debconf-set-selections preseed.txt
+RUN apt-get install -y postfix
+RUN postconf -e mydestination="$myhostname, cdsenv, localhost.localdomain, localhost"
+RUN postconf -e inet_interfaces="loopback-only"
+RUN postconf -e default_transport="smtp"
+RUN postconf -e relay_transport="error"
+
+
+#arret d'apache
+CMD service apache2 stop
+
+#ajout des clé ssh/id_rsa
+ARG SSH_PRIVATE_KEY
+RUN mkdir /root/.ssh/
+RUN echo "${SSH_PRIVATE_KEY}" > /root/.ssh/id_rsa
+RUN ssh-keyscan lfr008487 >> /root/.ssh/known_hosts 
+
+# récuperation des conf et de la meteoWeb depuis le git
+RUN git clone root@lfr008487:/home/git/projects/envMeteoWeb.git/ /tmp/envMeteoWeb
+
+# création de l'arbo
+RUN mkdir /server
+RUN mkdir /server/websites/
+
+# déplacement de la meteoWeb
+RUN mv /tmp/envMeteoWeb/MeteoWeb /server/websites/meteoWeb
+
+# changer le proprietaire du répertoir et les permissions
+RUN chown -R www-data:www-data /server/websites/meteoWeb
+RUN chmod -R 755 /server/websites/meteoWeb
+
+# déplacement des fichier de conf
+RUN mv /tmp/envMeteoWeb/configuration/apache/apache2.conf /etc/apache2/
+RUN mv /tmp/envMeteoWeb/configuration/apache/sites/* /etc/apache2/sites-available/
+RUN mv /tmp/envMeteoWeb/configuration/apache/hosts /etc/
+RUN mv /tmp/envMeteoWeb/configuration/php/php.ini /etc/php/*/apache2/
+
+# Création des lien symbolique
+#RUN ln -s /etc/apache2/sites-available/000-default.conf /etc/apache2/sites-enabled/000-default.conf
+RUN ln -s /etc/apache2/sites-available/003-meteoWeb.conf /etc/apache2/sites-enabled/003-meteoWeb.con
+#RUN ln -s /etc/apache2/sites-available/default-ssl.conf /etc/apache2/sites-enabled/default-ssl.conf
+
+
+
+EXPOSE 80 83 25
+
+#COPY docker-entrypoint.sh /usr/local/bin/
+#RUN ln -s usr/local/bin/docker-entrypoint.sh /entrypoint.sh
+#ENTRYPOINT ["docker-entrypoint.sh"]
